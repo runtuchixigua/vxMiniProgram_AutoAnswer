@@ -360,6 +360,22 @@ def find_text_position_in_window(window_info, target_text, timeout=10):
     print(f"窗口信息: 位置=({window_info['left']}, {window_info['top']}), 大小=({window_info['width']}, {window_info['height']})")
     print(f"查找目标文本: '{target_text}'")
     
+    # 针对macOS的坐标系校准参数
+    # 微信窗口通常有标题栏和边框，需要进行补偿
+    border_offset_x = 0  # 水平边框补偿
+    border_offset_y = 0  # 垂直边框补偿
+    
+    # 获取应用名称进行特定应用的校准
+    app_name = window_info.get('app_name', '').lower()
+    
+    # 针对微信等应用的特殊校准
+    if '微信' in app_name or 'wechat' in app_name:
+        # 在macOS上，微信窗口的Quartz坐标和实际可点击区域可能有差异
+        # 添加边框补偿以提高准确性
+        border_offset_x = 8  # 左侧边框补偿
+        border_offset_y = 22  # 顶部标题栏补偿
+        print(f"应用微信特定校准: 边框补偿 ({border_offset_x}, {border_offset_y})")
+    
     while time.time() - start_time < timeout:
         # 捕获窗口截图
         screenshot_data = capture_window_screenshot(window_info)
@@ -387,13 +403,23 @@ def find_text_position_in_window(window_info, target_text, timeout=10):
             for result in ocr_results:
                 # 直接匹配或子串匹配
                 if target_text == result['text'] or target_text in result['text'] or result['text'] in target_text:
-                    # 将OCR坐标系转换为屏幕坐标系，确保使用浮点数计算
-                    screen_x = float(window_info['left']) + float(result['x'])
-                    screen_y = float(window_info['top']) + float(result['y'])
+                    # 将OCR坐标系转换为屏幕坐标系，调整为使用相对坐标
+                    # 对于微信小程序界面，需要特殊处理y轴坐标
+                    ocr_x = float(result['x'])
+                    ocr_y = float(result['y'])
+                    
+                    # 针对微信小程序界面的特殊校准
+                    # x轴应用正常的边框补偿
+                    screen_x = ocr_x + border_offset_x
+                    
+                    # y轴进行特殊调整，从OCR的大值(1000+)缩放到700+范围
+                    # 通过减去一个固定偏移值来调整y坐标
+                    y_offset_adjustment = 350  # 调整y轴偏移的固定值
+                    screen_y = ocr_y - y_offset_adjustment + border_offset_y
                     
                     print(f"直接匹配成功: 目标'{target_text}' 匹配到 '{result['text']}'")
-                    print(f"  OCR相对坐标: ({result['x']:.1f}, {result['y']:.1f})")
-                    print(f"  窗口绝对位置: ({window_info['left']}, {window_info['top']})")
+                    print(f"  OCR相对坐标: ({ocr_x:.1f}, {ocr_y:.1f})")
+                    print(f"  应用边框补偿: ({border_offset_x}, {border_offset_y})")
                     print(f"  转换后屏幕坐标: ({screen_x:.1f}, {screen_y:.1f})")
                     return (screen_x, screen_y)
             
@@ -404,13 +430,23 @@ def find_text_position_in_window(window_info, target_text, timeout=10):
                 if len(target_word) >= 2:  # 只匹配长度>=2的词
                     for result in ocr_results:
                         if target_word in result['text'] or result['text'] in target_word:
-                            # 将OCR坐标系转换为屏幕坐标系，确保使用浮点数计算
-                            screen_x = float(window_info['left']) + float(result['x'])
-                            screen_y = float(window_info['top']) + float(result['y'])
+                            # 将OCR坐标系转换为屏幕坐标系，调整为使用相对坐标
+                            # 对于微信小程序界面，需要特殊处理y轴坐标
+                            ocr_x = float(result['x'])
+                            ocr_y = float(result['y'])
+                            
+                            # 针对微信小程序界面的特殊校准
+                            # x轴应用正常的边框补偿
+                            screen_x = ocr_x + border_offset_x
+                            
+                            # y轴进行特殊调整，从OCR的大值(1000+)缩放到700+范围
+                            # 通过减去一个固定偏移值来调整y坐标
+                            y_offset_adjustment = 350  # 调整y轴偏移的固定值
+                            screen_y = ocr_y - y_offset_adjustment + border_offset_y
                             
                             print(f"分词匹配成功: 目标'{target_word}' 匹配到 '{result['text']}'")
-                            print(f"  OCR相对坐标: ({result['x']:.1f}, {result['y']:.1f})")
-                            print(f"  窗口绝对位置: ({window_info['left']}, {window_info['top']})")
+                            print(f"  OCR相对坐标: ({ocr_x:.1f}, {ocr_y:.1f})")
+                            print(f"  应用边框补偿: ({border_offset_x}, {border_offset_y})")
                             print(f"  转换后屏幕坐标: ({screen_x:.1f}, {screen_y:.1f})")
                             return (screen_x, screen_y)
         
